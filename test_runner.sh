@@ -38,8 +38,8 @@ for input_file in "$input_dir"/*.in; do
     test_name=$(basename "$input_file" .in)
 
     # Expected and output file paths
-    expected_file="$expected_dir/$test_name.exp"
-    output_file="$output_dir/$test_name.out"
+    expected_file="$expected_dir/$test_name.out"
+    output_file="$output_dir/$test_name.out112"
 
     # Run the program and redirect output
 	

@@ -11,8 +11,7 @@ void CodeGenVisitor::emitPrintFunctions() {
 declare void @exit(i32)
 @.int_specifier = constant [4 x i8] c"%d\0A\00"
 @.str_specifier = constant [4 x i8] c"%s\0A\00"
-
-
+@.div_zero_msg = constant [23 x i8] c"Error division by zero\00"
 define void @printi(i32) {
     %spec_ptr = getelementptr [4 x i8], [4 x i8]* @.int_specifier, i32 0, i32 0
     call i32 (i8*, ...) @printf(i8* %spec_ptr, i32 %0)
@@ -57,9 +56,25 @@ void CodeGenVisitor::visit(ast::Type &node) {
 }
 
 void CodeGenVisitor::visit(ast::Cast &node) {
-    node.exp->accept(*this);
-    node.llvm_register = node.exp->llvm_register;
+    node.exp->accept(*this);  // Generate code for the expression to be casted
+    std::string inputReg = node.exp->llvm_register;
+    std::string castedReg = buffer.freshVar();
+
+    // Check the type of conversion
+    if (node.target_type->type == ast::BuiltInType::BYTE && node.exp->type == ast::BuiltInType::INT) {
+        // INT to BYTE: Truncate the higher bits to fit into an 8-bit register
+        std::string truncated = buffer.freshVar();
+        buffer.emit(truncated + " = trunc i32 " + inputReg + " to i8");
+
+        // Extend back to 32-bit (for consistent representation)
+        buffer.emit(castedReg + " = zext i8 " + truncated + " to i32");
+        node.llvm_register = castedReg;
+    } 
+    else{
+        node.llvm_register = inputReg;
+    }
 }
+
 
 void CodeGenVisitor::visit(ast::ExpList &node) {
     for (auto &exp : node.exps) {
@@ -103,51 +118,54 @@ void CodeGenVisitor::visit(ast::Formals &node) {
         }
     }
 
-    void CodeGenVisitor::visit(ast::BinOp &node) {
-        node.left->accept(*this);
-        node.right->accept(*this);
-        
-        std::string lhs = node.left->llvm_register;
-        std::string rhs = node.right->llvm_register;
-        std::string temp = freshVar();
+void CodeGenVisitor::visit(ast::BinOp &node) {
+    node.left->accept(*this);
+    node.right->accept(*this);
 
-        if (node.op == ast::BinOpType::ADD) {
-            buffer.emit(temp + " = add i32 " + lhs + ", " + rhs);
-        } else if (node.op == ast::BinOpType::SUB) {
-            buffer.emit(temp + " = sub i32 " + lhs + ", " + rhs);
-        } else if (node.op == ast::BinOpType::MUL) {
-            buffer.emit(temp + " = mul i32 " + lhs + ", " + rhs);
-        }
-        //check div
-else if (node.op == ast::BinOpType::DIV) {
+    std::string lhs = node.left->llvm_register;
+    std::string rhs = node.right->llvm_register;
+    std::string wideResult = freshVar();
+
+    if (node.op == ast::BinOpType::ADD) {
+        buffer.emit(wideResult + " = add i32 " + lhs + ", " + rhs);
+    } else if (node.op == ast::BinOpType::SUB) {
+        buffer.emit(wideResult + " = sub i32 " + lhs + ", " + rhs);
+    } else if (node.op == ast::BinOpType::MUL) {
+        buffer.emit(wideResult + " = mul i32 " + lhs + ", " + rhs);
+    } else if (node.op == ast::BinOpType::DIV) {
         std::string zeroCheck = freshVar();
         std::string errorLabel = freshLabel();
         std::string continueLabel = freshLabel();
-        std::string resultReg = freshVar();
 
-        // Check if rhs is zero
         buffer.emit(zeroCheck + " = icmp eq i32 " + rhs + ", 0");
-
-        // Branch to error or continue safely
         buffer.emit("br i1 " + zeroCheck + ", label " + errorLabel + ", label " + continueLabel);
 
-        // Error block: Exit if division by zero
         buffer.emitLabel(errorLabel);
-        buffer.emit("call void @exit(i32 1)");
+        buffer.emit("call void @print(i8* @.div_zero_msg)");
+        buffer.emit("call void @exit(i32 0)");
         buffer.emit("unreachable");
 
-        // Continue block: Perform the division safely
         buffer.emitLabel(continueLabel);
-        std::string divResult = freshVar();
-        buffer.emit(divResult + " = sdiv i32 " + lhs + ", " + rhs);
-
-        // Assign result
-        buffer.emit(resultReg + " = phi i32 [" + divResult + ", " + continueLabel + "]");
-
-        node.llvm_register = resultReg;
+        buffer.emit(wideResult + " = sdiv i32 " + lhs + ", " + rhs);
     }
-        node.llvm_register = temp;
+    node.llvm_register = wideResult;
+    if (node.type == ast::BuiltInType::BYTE) {    
+        // **Force wraparound with `& 255` (0xFF)**
+        std::string wrapped = freshVar();
+        buffer.emit(wrapped + " = and i32 " + wideResult + ", 255");
+
+        // **Convert to byte properly**
+        std::string truncated = freshVar();
+        buffer.emit(truncated + " = trunc i32 " + wrapped + " to i8");
+
+        // **Extend back to `i32`**
+        std::string extended = freshVar();
+        buffer.emit(extended + " = zext i8 " + truncated + " to i32");
+
+        node.llvm_register = extended;
     }
+}
+
     void CodeGenVisitor::visit(ast::RelOp &node) {
         node.left->accept(*this);
         node.right->accept(*this);
@@ -258,7 +276,7 @@ void CodeGenVisitor::visit(ast::Or &node) {
 
 
     void CodeGenVisitor::visit(ast::VarDecl &node) {
-        std::string varIndex = std::to_string(node.id->offset); // Get offset in the local variable array
+        std::string varIndex = std::to_string(node.offset); // Get offset in the local variable array
         std::string ptr = buffer.freshVar();
         // Get pointer to the allocated slot inside the `[50 x i32]` array
         buffer.emit(ptr + " = getelementptr [50 x i32], [50 x i32]*" + functionvartable +", i32 0, i32 " + varIndex);
@@ -373,6 +391,9 @@ void CodeGenVisitor::visit(ast::While &node) {
     // If the function is void, emit return void
     if (node.return_type->type == ast::BuiltInType::VOID) {
         buffer.emit("ret void");
+    }
+    else{
+        buffer.emit("ret i32 0");
     }
 
     buffer.emit("}");

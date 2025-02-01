@@ -94,11 +94,11 @@
         node.exp->accept(*this);
         //only int to byte or vice versa is allowed
         if(node.target_type->type == ast::BuiltInType::INT &&  node.exp->type == ast::BuiltInType::BYTE){ //casting from byte to int
-            node.exp->type = ast::BuiltInType::INT;
+            //node.exp->type = ast::BuiltInType::INT;
             node.type = ast::BuiltInType::INT;
         }
         else if(node.target_type->type == ast::BuiltInType::BYTE &&  node.exp->type == ast::BuiltInType::INT){ //casting from int to byte
-            node.exp->type = ast::BuiltInType::BYTE;
+            //node.exp->type = ast::BuiltInType::BYTE;
             node.type = ast::BuiltInType::BYTE;
         }
         else if(node.target_type->type != node.exp->type){ //problem with casting
@@ -160,7 +160,7 @@
         }
         node.exp->accept(*this);
         if(node.exp->type == ast::BuiltInType::BYTE && returnType == ast::BuiltInType::INT){ //auto casting from byte to int
-            node.exp->type = ast::BuiltInType::INT;
+            //node.exp->type = ast::BuiltInType::INT;
         }
         else if(node.exp->type != returnType){
             output::errorMismatch(node.line);
@@ -205,7 +205,7 @@
         if (node.init_exp) {
             node.init_exp->accept(*this);
             if(node.init_exp->type == ast::BuiltInType::BYTE && node.type->type == ast::BuiltInType::INT){ //auto casting from byte to int
-                node.init_exp->type = ast::BuiltInType::INT;
+                //node.init_exp->type = ast::BuiltInType::INT;
             }
             else if(node.init_exp->type != node.type->type){
                 output::errorMismatch(node.line);
@@ -219,7 +219,7 @@
         node.id->accept(*this);
         node.exp->accept(*this);
         if(node.id->type == ast::BuiltInType::INT && node.exp->type == ast::BuiltInType::BYTE){ //auto casting from byte to int
-            node.exp->type = ast::BuiltInType::INT;
+           //node.exp->type = ast::BuiltInType::INT;
         }
         else if((node.id->type != node.exp->type))
             output::errorMismatch(node.line);

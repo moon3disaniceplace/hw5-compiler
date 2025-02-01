@@ -53,13 +53,13 @@ ast::BuiltInType SymbolTable::findVar(const std::string &name) {
 }
 
 int SymbolTable::findVarOffset(const std::string &name) {
-    //start by searching the current scope and then go down the stack
     for (auto it = scopes.rbegin(); it != scopes.rend(); ++it) {
-        if (it->find(name) != it->end()) return it->find(name)->second->offset;
+        auto var = it->find(name);
+        if (var != it->end()) {
+            return var->second->offset;
+        }
     }
-    return -1;
-    //error
-
+    return -1; // Error case
 }
 bool SymbolTable::isDefined(const std::string &name, int line) {
     //start by check its not a function
@@ -109,7 +109,7 @@ std::shared_ptr<Function> SymbolTable::findFunction(const ast::Call &node){
             continue;
         }
         else if(function->parameters[i] == ast::BuiltInType::INT && node.args->exps[i]->type == ast::BuiltInType::BYTE){
-            node.args->exps[i]->type = ast::BuiltInType::INT; //auto casting from byte to int
+            //node.args->exps[i]->type = ast::BuiltInType::INT; //auto casting from byte to int
             continue;
         }
         output::errorPrototypeMismatch(node.line, node.func_id->value,req_types);
