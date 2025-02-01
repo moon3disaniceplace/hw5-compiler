@@ -1,0 +1,8 @@
+void main() {
+
+bool c = false;
+
+	int x = 6;
+    x=4;
+	printi(x);
+}
