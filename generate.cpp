@@ -141,7 +141,10 @@ void CodeGenVisitor::visit(ast::BinOp &node) {
         buffer.emit("br i1 " + zeroCheck + ", label " + errorLabel + ", label " + continueLabel);
 
         buffer.emitLabel(errorLabel);
-        buffer.emit("call void @print(i8* @.div_zero_msg)");
+        std::string msg_ptr = freshVar();
+        buffer.emit(msg_ptr + " = getelementptr[23 x i8], [23 x i8] * @.div_zero_msg, i32 0, i32 0");
+        buffer.emit("call void @print(i8 * " + msg_ptr + ")");
+        //buffer.emit("call void @print(i8* @.div_zero_msg)");
         buffer.emit("call void @exit(i32 0)");
         buffer.emit("unreachable");
 
